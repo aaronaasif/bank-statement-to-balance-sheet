@@ -1,6 +1,6 @@
 # Bank Statement to Balance Sheet
 
-**Live demo:** https://bank-statement-to-balance-sheet.onrender.com/(free hosting, so the first load can take about a minute). Try it with `sample/demo_statement.pdf`.
+**Live demo:** https://bank-statement-to-balance-sheet.onrender.com/ (free hosting, so the first load can take about a minute). Try it with `sample/demo_statement.pdf`.
 
 Upload a PDF bank statement and get a balance sheet: every transaction extracted, checked against the running balance, grouped into categories, and exported to Excel.
 
