@@ -1,0 +1,14 @@
+# Secrets and environments
+.env
+.venv/
+__pycache__/
+
+# Never upload real statements or the data extracted from them
+*.pdf
+*.xlsx
+*.csv
+
+# ...except the fictional demo files
+!sample/
+!sample/*.pdf
+!sample/*.xlsx
