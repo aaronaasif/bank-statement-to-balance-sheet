@@ -1,5 +1,7 @@
 # Bank Statement to Balance Sheet
 
+**Live demo:** https://bank-statement-to-balance-sheet.onrender.com/(free hosting, so the first load can take about a minute). Try it with `sample/demo_statement.pdf`.
+
 Upload a PDF bank statement and get a balance sheet: every transaction extracted, checked against the running balance, grouped into categories, and exported to Excel.
 
 ![Screenshot of the app](docs/screenshot.png)
@@ -39,3 +41,4 @@ Open http://127.0.0.1:8000 and upload `sample/demo_statement.pdf`.
 ## Built with
 
 Python, FastAPI, pdfplumber, openpyxl. Categories and the tax rate can be changed at the top of `balance_app.py`.
+
