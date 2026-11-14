@@ -428,11 +428,19 @@ PAGE = r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Balance Sheet Builder</title>
 <style>
-  :root {
+
+/*:root {
     --bg: #f4f1ec; --card: #ffffff; --ink: #1d2433; --muted: #6b7385; --line: #e4e0d8;
-    --accent: #0f6b5c; --accent-soft: #e2f1ee; --debit: #b4412f; --credit: #0f6b5c;
+    --accent: #0f6b5c; --accent-soft: #e2f1ee; --debit: #b4412f; --credit: #0f6b5c; 
+    --warn: #8a5a00; --warn-soft: #fdf1d6;
+  }*/
+
+    :root {
+    --bg: #f6f3ee; --card: #ffffff; --ink: #15171c; --muted: #636875; --line: #e4dfd6;
+    --accent: #d9480f; --accent-soft: #fbe6da; --debit: #b42318; --credit: #1d6b43;
     --warn: #8a5a00; --warn-soft: #fdf1d6;
   }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; }
   .topbar { display: flex; align-items: center; padding: 20px 32px; background: var(--card); border-bottom: 1px solid var(--line); }
@@ -444,11 +452,10 @@ PAGE = r"""<!doctype html>
   .sub { color: var(--muted); font-size: 16px; margin-bottom: 26px; }
 
   .upload { display: grid; grid-template-columns: 1fr 280px; gap: 20px; }
-  .drop { background: var(--card); border: 2px dashed #bfc9c5; border-radius: 16px; padding: 24px 28px; display: flex; align-items: center; gap: 22px; cursor: pointer; flex-wrap: wrap; }
+  .drop { background: var(--card); border: 2px dashed #cfc9bd; border-radius: 16px; padding: 24px 28px; display: flex; align-items: center; gap: 22px; cursor: pointer; flex-wrap: wrap; }
   .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-  .drop .ico { width: 60px; height: 60px; border-radius: 14px; background: var(--accent-soft); position: relative; flex: none; }
-  .drop .ico:before { content: ""; position: absolute; left: 28px; top: 17px; width: 3px; height: 26px; background: var(--accent); }
-  .drop .ico:after { content: ""; position: absolute; left: 22px; top: 17px; width: 12px; height: 12px; border-left: 3px solid var(--accent); border-top: 3px solid var(--accent); transform: translate(3px, 2px) rotate(45deg); }
+  .drop .ico { width: 60px; height: 60px; border-radius: 14px; background: var(--accent-soft);
+               flex: none; display: flex; align-items: center; justify-content: center; color: var(--accent); }
   .drop h3 { font-size: 18px; margin-bottom: 4px; }
   .drop p { color: var(--muted); }
   .file { margin-left: auto; display: flex; align-items: center; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
@@ -456,7 +463,7 @@ PAGE = r"""<!doctype html>
   .file .pdf { background: var(--debit); color: #fff; font-size: 11px; font-weight: 700; padding: 6px 7px; border-radius: 6px; }
   .file small { color: var(--muted); display: block; font-size: 12.5px; }
   .file .x { color: var(--muted); font-size: 22px; line-height: 1; margin-left: 6px; background: none; border: 0; cursor: pointer; }
-  .go { background: var(--accent); color: #fff; border: 0; border-radius: 16px; font: inherit; font-weight: 700; font-size: 19px; cursor: pointer; padding: 22px; box-shadow: 0 8px 20px rgba(15,107,92,.28); }
+  .go { background: var(--accent); color: #fff; border: 0; border-radius: 16px; font: inherit; font-weight: 700; font-size: 19px; cursor: pointer; padding: 22px; box-shadow: 0 8px 20px rgba(217,72,15,.28); }
   .go small { display: block; font-weight: 500; font-size: 13px; opacity: .85; margin-top: 6px; }
   .go:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
   .privacy { color: var(--muted); font-size: 13px; margin-top: 12px; }
@@ -465,7 +472,7 @@ PAGE = r"""<!doctype html>
   .error[hidden], #results[hidden] { display: none; }
 
   .status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 26px 0 16px; }
-  .badge { background: var(--accent-soft); color: var(--accent); font-weight: 600; padding: 6px 14px; border-radius: 999px; font-size: 13.5px; }
+  .badge { background: background: #e3f1e8; color: var(--credit); font-weight: 600; padding: 6px 14px; border-radius: 999px; font-size: 13.5px; }
   .badge.warn { background: var(--warn-soft); color: var(--warn); }
   .status span.t { color: var(--muted); }
   .warnbox { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; font-size: 14px; }
@@ -488,7 +495,7 @@ PAGE = r"""<!doctype html>
   .tools h4 { font-size: 17px; }
   .btns { display: flex; gap: 10px; }
   .btn { font: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 9px 16px; font-weight: 600; font-size: 13.5px; background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
-  .btn.p { background: var(--accent-soft); color: var(--accent); border-color: #c5e0da; }
+  .btn.p { background: var(--accent-soft); color: var(--accent); border-color: #f3c9b3; }
   .tablewrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 12.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding: 12px 24px; background: #faf8f5; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
@@ -511,7 +518,12 @@ PAGE = r"""<!doctype html>
     <div class="upload">
       <label class="drop" id="drop">
         <input type="file" id="file" accept="application/pdf,.pdf" hidden>
-        <div class="ico"></div>
+        <div class="ico">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+        </div>
         <div>
           <h3>Drag &amp; drop your statement here</h3>
           <p>or click to browse &middot; PDF, up to 20 MB</p>
