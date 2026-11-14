@@ -68,7 +68,7 @@ def num(text):
 def wht_of(amount):
     return (amount * WHT_RATE).quantize(CENT, rounding=ROUND_HALF_UP)
 
-
+# Group words that sit on the same visual line.
 def group_lines(words, tol=3):
     """Group words that sit on the same visual line."""
     lines = []
@@ -92,6 +92,26 @@ def find_bounds(lines):
             return b1, b2, b3
     return None
 
+HEADER_WORDS = {
+    "debit":   {"debit", "debits", "withdrawals", "withdrawal", "out"},
+    "credit":  {"credit", "credits", "deposits", "deposit", "in"},
+    "amount":  {"amount"},
+    "balance": {"balance"},
+}
+
+def find_columns(lines):
+    """Find the header line. Return {column name: right edge x}, or None."""
+    for ws in lines:
+        cols = {}
+        for w in ws:
+            text = w["text"].lower()
+            for name, words in HEADER_WORDS.items():
+                if text in words:
+                    cols[name] = w["x1"]
+        two = "debit" in cols and "credit" in cols
+        if "balance" in cols and (two or "amount" in cols):
+            return cols
+    return None
 
 def read_pdf(data):
     """Return (rows, page_count). Rows are in statement order (newest first)."""
@@ -429,13 +449,7 @@ PAGE = r"""<!doctype html>
 <title>Balance Sheet Builder</title>
 <style>
 
-/*:root {
-    --bg: #f4f1ec; --card: #ffffff; --ink: #1d2433; --muted: #6b7385; --line: #e4e0d8;
-    --accent: #0f6b5c; --accent-soft: #e2f1ee; --debit: #b4412f; --credit: #0f6b5c; 
-    --warn: #8a5a00; --warn-soft: #fdf1d6;
-  }*/
-
-    :root {
+  :root {
     --bg: #f6f3ee; --card: #ffffff; --ink: #15171c; --muted: #636875; --line: #e4dfd6;
     --accent: #d9480f; --accent-soft: #fbe6da; --debit: #b42318; --credit: #1d6b43;
     --warn: #8a5a00; --warn-soft: #fdf1d6;
