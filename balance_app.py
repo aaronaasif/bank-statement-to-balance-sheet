@@ -18,14 +18,16 @@ import re
 import secrets
 import time
 from decimal import Decimal, ROUND_HALF_UP
-
 import pdfplumber
+from datetime import datetime
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from starlette.concurrency import run_in_threadpool
+
 
 # ----------------------------------------------------------------------------
 # Settings you may want to change
@@ -112,6 +114,24 @@ def find_columns(lines):
         if "balance" in cols and (two or "amount" in cols):
             return cols
     return None
+
+
+DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d %b %Y", "%d-%b-%Y", "%d %B %Y"]
+# Return (date, words used) if the line starts with a date, else None.
+def read_date(ws):
+    """If the line starts with a date, return (date, words used). Else None."""
+    for skip in (0, 1):                      # 1 = the line starts with a serial number
+        if skip and not ws[0]["text"].isdigit():
+            break
+        for n in (1, 3):                     # a date is one word, or three ("01 Jun 2026")
+            text = " ".join(w["text"] for w in ws[skip:skip + n])
+            for fmt in DATE_FORMATS:
+                try:
+                    return datetime.strptime(text, fmt).date(), skip + n
+                except ValueError:
+                    pass
+    return None
+
 
 def read_pdf(data):
     """Return (rows, page_count). Rows are in statement order (newest first)."""
