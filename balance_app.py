@@ -132,6 +132,28 @@ def read_date(ws):
                     pass
     return None
 
+MONEY = re.compile(r"^-?[\d,]+\.\d{2}$")
+COLUMN_TOLERANCE = 15          # how far (in points) an amount may sit from its column edge
+
+# 
+def read_row(ws, cols):
+    """Turn one line of words into a row, or None if it is not a transaction."""
+    found = read_date(ws)
+    if not found:
+        return None
+    day, used = found
+    row = {"date": day.isoformat(), "desc": "", "debit": ZERO, "credit": ZERO, "balance": None}
+    desc = []
+    for w in ws[used:]:
+        name = min(cols, key=lambda c: abs(cols[c] - w["x1"]))      # nearest column
+        if MONEY.match(w["text"]) and abs(cols[name] - w["x1"]) <= COLUMN_TOLERANCE:
+            row[name] = num(w["text"])
+        else:
+            desc.append(w["text"])
+    if row["balance"] is None:
+        return None                      # a dated line without a balance is not a transaction
+    row["desc"] = " ".join(desc)
+    return row
 
 def read_pdf(data):
     """Return (rows, page_count). Rows are in statement order (newest first)."""
