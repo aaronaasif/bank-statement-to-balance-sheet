@@ -135,7 +135,7 @@ def read_date(ws):
 MONEY = re.compile(r"^-?[\d,]+\.\d{2}$")
 COLUMN_TOLERANCE = 15          # how far (in points) an amount may sit from its column edge
 
-# 
+# Return a row dict if the line is a transaction, else None.
 def read_row(ws, cols):
     """Turn one line of words into a row, or None if it is not a transaction."""
     found = read_date(ws)
@@ -153,8 +153,20 @@ def read_row(ws, cols):
     if row["balance"] is None:
         return None                      # a dated line without a balance is not a transaction
     row["desc"] = " ".join(desc)
+    return split_amount(row)
+
+# Split a signed amount into debit and credit
+def split_amount(row):
+    """A signed Amount column: negative is money out, positive is money in."""
+    amount = row.pop("amount", None)
+    if amount is not None:
+        if amount < 0:
+            row["debit"] = -amount
+        else:
+            row["credit"] = amount
     return row
 
+# Read the PDF and extract transaction rows
 def read_pdf(data):
     """Return (rows, page_count). Rows are in statement order (newest first)."""
     try:
