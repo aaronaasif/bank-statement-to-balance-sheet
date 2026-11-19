@@ -116,16 +116,32 @@ def find_columns(lines):
     return None
 
 
-DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d %b %Y", "%d-%b-%Y", "%d %B %Y"]
+DATE_FORMATS = ["%Y-%m-%d", "%d %b %Y", "%d-%b-%Y", "%d %B %Y"]
+SLASH_DATE = re.compile(r"^(\d{1,2})/(\d{1,2})/\d{4}$")
+# Return the date format string for a slash-separated date, based on the first two numbers w.r.t month in mid.
+def slash_format(pages_words):
+    """Decide whether 02/09/2026 means day/month or month/day for this statement."""
+    for words in pages_words:
+        for w in words:
+            m = SLASH_DATE.match(w["text"])
+            if m:
+                first, second = int(m.group(1)), int(m.group(2))
+                if first > 12:
+                    return "%d/%m/%Y"        # 25/09/2026: the day comes first
+                if second > 12:
+                    return "%m/%d/%Y"        # 09/25/2026: the month comes first
+    return "%d/%m/%Y"                         # no clue in the file: assume day first
+
+
 # Return (date, words used) if the line starts with a date, else None.
-def read_date(ws):
+def read_date(ws, formats):
     """If the line starts with a date, return (date, words used). Else None."""
     for skip in (0, 1):                      # 1 = the line starts with a serial number
         if skip and not ws[0]["text"].isdigit():
             break
         for n in (1, 3):                     # a date is one word, or three ("01 Jun 2026")
             text = " ".join(w["text"] for w in ws[skip:skip + n])
-            for fmt in DATE_FORMATS:
+            for fmt in formats:
                 try:
                     return datetime.strptime(text, fmt).date(), skip + n
                 except ValueError:
@@ -136,9 +152,9 @@ MONEY = re.compile(r"^-?[\d,]+\.\d{2}$")
 COLUMN_TOLERANCE = 15          # how far (in points) an amount may sit from its column edge
 
 # Return a row dict if the line is a transaction, else None.
-def read_row(ws, cols):
+def read_row(ws, cols, formats):
     """Turn one line of words into a row, or None if it is not a transaction."""
-    found = read_date(ws)
+    found = read_date(ws, formats)
     if not found:
         return None
     day, used = found
@@ -165,6 +181,14 @@ def split_amount(row):
         else:
             row["credit"] = amount
     return row
+
+# Return the rows in statement order (newest first), whichever order the statement uses.
+def newest_first(rows):
+    """Put the newest transaction first, whichever order the statement uses."""
+    if rows and rows[0]["date"] < rows[-1]["date"]:
+        rows.reverse()
+    return rows
+
 
 # Read the PDF and extract transaction rows
 def read_pdf(data):
@@ -221,8 +245,7 @@ def read_pdf(data):
             "A scanned (image) statement or a different layout will not work."
         )
     # Make sure the newest transaction comes first.
-    if rows[0]["date"] < rows[-1]["date"]:
-        rows.reverse()
+    newest_first(rows)
     return rows, pages
 
 
