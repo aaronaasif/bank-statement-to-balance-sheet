@@ -36,7 +36,8 @@ MAX_UPLOAD_MB = 20
 RESULT_TTL_SECONDS = 15 * 60          # how long the Excel download stays available
 
 WHT_RATE = Decimal("0.20")            # withholding tax on gross profit
-PROFIT_KEYWORDS = ["PROFIT"]          # only used for the oldest row, which has no row below it
+PROFIT_KEYWORDS = ["GROSS PROFIT"]
+TAX_KEYWORDS = ["WITHHOLDING TAX"]
 
 # First matching keyword wins, so keep the order. Gross profit rows are detected
 # separately (from the 20% WHT gap in the running balance).
@@ -250,32 +251,21 @@ def read_pdf(data):
 
 
 # ----------------------------------------------------------------------------
-# 2. Working out WHT, categories and totals
+# 2. Categorization and analysis
 # ----------------------------------------------------------------------------
-def apply_wht(rows):
-    """
-    The bank credits only 80% of each gross profit payment and does not show the
-    20% withholding tax as a line. Rows are newest first, so the older
-    transaction is the row below. If a credit raised the balance by less than
-    the credit, and the gap is exactly 20% of the credit, that row is gross profit.
-    """
-    for i, r in enumerate(rows):
-        r["wht"] = ZERO
-        if r["credit"] <= 0 or r["debit"] > 0:
-            continue
-        if i + 1 < len(rows):
-            change = r["balance"] - rows[i + 1]["balance"]
-            gap = r["credit"] - change
-            if gap > 0 and abs(gap - wht_of(r["credit"])) <= CENT:
-                r["wht"] = gap
-        elif any(k in r["desc"].upper() for k in PROFIT_KEYWORDS):
-            # oldest row: nothing below it to compare with, so go by the description
-            r["wht"] = wht_of(r["credit"])
+def is_profit(r):
+    return r["credit"] > 0 and any(k in r["desc"].upper() for k in PROFIT_KEYWORDS)
+
+
+def is_tax(r):
+    return r["debit"] > 0 and any(k in r["desc"].upper() for k in TAX_KEYWORDS)
 
 
 def categorize(r):
-    if r["wht"] > 0:
+    if is_profit(r):
         return "Gross profit"
+    if is_tax(r):
+        return "Withholding tax"
     d = r["desc"].upper()
     for key, cat in RULES:
         if key in d:
@@ -284,11 +274,10 @@ def categorize(r):
 
 
 def net_of(r):
-    return r["credit"] - r["debit"] - r["wht"]
+    return r["credit"] - r["debit"]
 
 
 def analyse(rows, pages):
-    apply_wht(rows)
     for r in rows:
         r["category"] = categorize(r)
 
@@ -298,7 +287,7 @@ def analyse(rows, pages):
         r = rows[i]
         change = r["balance"] - rows[i + 1]["balance"]
         if change != net_of(r):
-            unexplained.append({"sno": r["sno"], "date": r["date"], "desc": r["desc"],
+           unexplained.append({"sno": r.get("sno", i + 1), "date": r["date"], "desc": r["desc"],
                                 "difference": float(change - net_of(r))})
 
     opening = rows[-1]["balance"] - net_of(rows[-1])
@@ -306,8 +295,8 @@ def analyse(rows, pages):
     calculated = opening + sum(net_of(r) for r in rows)
     total_credit = sum(r["credit"] for r in rows)
     total_debit = sum(r["debit"] for r in rows)
-    total_wht = sum(r["wht"] for r in rows)
-    gross_profit = sum(r["credit"] for r in rows if r["wht"] > 0)
+    total_wht = sum(r["debit"] for r in rows if is_tax(r))
+    gross_profit = sum(r["credit"] for r in rows if is_profit(r))
 
     # monthly summary, oldest month first
     months = {}
@@ -317,15 +306,16 @@ def analyse(rows, pages):
             "debits": ZERO, "wht": ZERO, "net": ZERO, "closing_balance": ZERO})
         m["credits"] += r["credit"]
         m["debits"] += r["debit"]
-        m["wht"] += r["wht"]
         m["net"] += net_of(r)
-        if r["wht"] > 0:
-            m["gross_profit"] += r["credit"]
+        if is_tax(r):
+           m["wht"] += r["debit"]
+        if is_profit(r):
+           m["gross_profit"] += r["credit"]
         m["closing_balance"] = r["balance"]       # last one seen is the latest in the month
     monthly = list(months.values())
 
     # category summary, in a fixed, readable order
-    order = ["Gross profit"] + [c for _, c in RULES] + ["Other"]
+    order = ["Gross profit", "Withholding tax"] + [c for _, c in RULES] + ["Other"]
     cats = {}
     for r in rows:
         c = cats.setdefault(r["category"], {"name": r["category"], "count": 0,
@@ -333,7 +323,8 @@ def analyse(rows, pages):
         c["count"] += 1
         c["debits"] += r["debit"]
         c["credits"] += r["credit"]
-        c["wht"] += r["wht"]
+        if is_tax(r):                    
+            c["wht"] += r["debit"]
     categories = [cats[n] for n in order if n in cats]
 
     return {

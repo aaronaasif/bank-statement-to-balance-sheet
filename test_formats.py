@@ -58,3 +58,11 @@ for name in ["demo_statement.pdf", "sample_A_us_style.pdf", "sample_B_uk_style.p
                 rows.append(row)
     rows = newest_first(rows)
     print(name, len(rows), "rows", rows[0]["date"], "to", rows[-1]["date"])
+
+
+from balance_app import analyse
+
+a = analyse(rows, 1)                      # rows from the last file in the loop, sample D
+print()
+print("reconciled:", a["reconciled"], " gross profit:", a["gross_profit"], " wht:", a["wht"])
+print([(c["name"], c["count"]) for c in a["categories"]])
