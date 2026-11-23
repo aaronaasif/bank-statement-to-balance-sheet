@@ -43,11 +43,16 @@ TAX_KEYWORDS = ["WITHHOLDING TAX"]
 # separately (from the 20% WHT gap in the running balance).
 RULES = [
     ("UTILITY BILL", "Utility bills"),
+    ("UBP", "Utility bills"),
     ("CASH WITHDRAWAL", "Cash withdrawals"),
+    ("CASH WITHDRAWL", "Cash withdrawals"),
     ("WITHDRL", "Other withdrawals"),
     ("POS PURCHASE", "POS"),
     ("RAAST", "Raast"),
+    ("IBFT", "Transfers"),
     ("IBT", "Transfers"),
+    ("TRANSFER", "Transfers"),
+    ("SALARY", "Salary"),
     ("DEPOSIT", "Deposits"),
 ]
 
@@ -193,61 +198,42 @@ def newest_first(rows):
 
 # Read the PDF and extract transaction rows
 def read_pdf(data):
-    """Return (rows, page_count). Rows are in statement order (newest first)."""
+    """Return (rows, page_count). Rows come back newest first."""
     try:
         pdf = pdfplumber.open(io.BytesIO(data))
     except Exception:
         raise StatementError("This file could not be opened as a PDF. It may be damaged or password protected.")
 
-    rows = []
-    bounds = None
-    last_page = last_top = None
-
     with pdf:
-        pages = len(pdf.pages)
-        for p, page in enumerate(pdf.pages):
-            lines = group_lines(page.extract_words())
-            bounds = find_bounds(lines) or bounds
-            if not bounds:
-                continue
-            b1, b2, b3 = bounds
+        pages_words = [page.extract_words() for page in pdf.pages]
+    formats = DATE_FORMATS + [slash_format(pages_words)]
 
-            for ws in lines:
-                top = ws[0]["top"]
-                if len(ws) > 1 and ws[0]["text"].isdigit() and DATE.match(ws[1]["text"]):
-                    debit, credit, balance = ZERO, ZERO, ZERO
-                    desc = []
-                    for w in ws[2:]:
-                        cx = (w["x0"] + w["x1"]) / 2
-                        if AMOUNT.match(w["text"]) and cx >= b1:
-                            v = num(w["text"])
-                            if cx < b2:
-                                debit = v
-                            elif cx < b3:
-                                credit = v
-                            else:
-                                balance = v
-                        elif cx < b1:
-                            desc.append(w["text"])
-                    rows.append({"sno": int(ws[0]["text"]), "date": ws[1]["text"],
-                                 "desc": " ".join(desc), "debit": debit,
-                                 "credit": credit, "balance": balance, "wht": ZERO})
-                    last_page, last_top = p, top
-                elif (rows and last_page == p and top - last_top < 14
-                      and all((w["x0"] + w["x1"]) / 2 < b1 for w in ws)):
-                    # description that wrapped onto a second line
-                    rows[-1]["desc"] += " " + " ".join(w["text"] for w in ws)
-                    last_top = top
+    rows, cols = [], None
+    for words in pages_words:
+        lines = group_lines(words)
+        cols = find_columns(lines) or cols
+        if not cols:
+            continue
+        text_edge = min(cols.values()) - 80       # descriptions end before the money columns
+        last_top = None
+        for ws in lines:
+            row = read_row(ws, cols, formats)
+            if row:
+                rows.append(row)
+                last_top = ws[0]["top"]
+            elif (rows and last_top is not None and ws[0]["top"] - last_top < 14
+                  and all(w["x1"] < text_edge for w in ws)):
+                # description that wrapped onto a second line
+                rows[-1]["desc"] += " " + " ".join(w["text"] for w in ws)
+                last_top = ws[0]["top"]
 
     if not rows:
         raise StatementError(
-            "No transactions were found. This app reads text-based PDFs in the "
-            "S.No / Date / Particulars / Debit / Credit / Balance layout. "
-            "A scanned (image) statement or a different layout will not work."
+            "No transactions were found. This app reads text-based PDF statements with "
+            "Date, Debit/Credit (or Amount) and Balance columns. A scanned (image) "
+            "statement will not work."
         )
-    # Make sure the newest transaction comes first.
-    newest_first(rows)
-    return rows, pages
+    return newest_first(rows), len(pages_words)
 
 
 # ----------------------------------------------------------------------------
@@ -315,7 +301,8 @@ def analyse(rows, pages):
     monthly = list(months.values())
 
     # category summary, in a fixed, readable order
-    order = ["Gross profit", "Withholding tax"] + [c for _, c in RULES] + ["Other"]
+    names = ["Gross profit", "Withholding tax"] + [c for _, c in RULES] + ["Other"]
+    order = list(dict.fromkeys(names))          # each name once, first position kept
     cats = {}
     for r in rows:
         c = cats.setdefault(r["category"], {"name": r["category"], "count": 0,
@@ -391,16 +378,16 @@ def build_workbook(a):
         [3, 4, 5],
         ["Total", len(a["rows"]), a["debits"], a["credits"], a["wht"]])
 
-    tx_headers = ["Date", "Description", "Debit", "Credit", "WHT", "Balance"]
+    tx_headers = ["Date", "Description", "Debit", "Credit", "Balance"]
     for c in a["categories"]:
         rows = [r for r in a["rows"] if r["category"] == c["name"]]
         add(c["name"], tx_headers,
-            [[r["date"], r["desc"], r["debit"], r["credit"], r["wht"], r["balance"]] for r in rows],
+            [[r["date"], r["desc"], r["debit"], r["credit"], r["balance"]] for r in rows],
             [3, 4, 5, 6],
-            ["", f"Total ({len(rows)} transactions)", c["debits"], c["credits"], c["wht"], None])
+            ["", f"Total ({len(rows)} transactions)", c["debits"], c["credits"], None])
 
-    add("All transactions", ["Date", "Description", "Category", "Debit", "Credit", "WHT", "Balance"],
-        [[r["date"], r["desc"], r["category"], r["debit"], r["credit"], r["wht"], r["balance"]]
+    add("All transactions", ["Date", "Description", "Category", "Debit", "Credit", "Balance"],
+        [[r["date"], r["desc"], r["category"], r["debit"], r["credit"], r["balance"]]
          for r in a["rows"]],
         [4, 5, 6, 7])
 
@@ -446,9 +433,9 @@ def _json_result(a, token):
                     for m in a["monthly"]],
         "categories": [{**c, **{k: _f(c[k]) for k in ("debits", "credits", "wht")}}
                        for c in a["categories"]],
-        "transactions": [{"sno": r["sno"], "date": r["date"], "desc": r["desc"],
+        "transactions": [{"date": r["date"], "desc": r["desc"],
                           "category": r["category"], "debit": _f(r["debit"]),
-                          "credit": _f(r["credit"]), "wht": _f(r["wht"]),
+                          "credit": _f(r["credit"]), 
                           "balance": _f(r["balance"])} for r in a["rows"]],
     }
 
@@ -714,13 +701,15 @@ function render() {
   if (s.unexplained.length) {
     wb.hidden = false;
     wb.textContent = 'These rows do not match the running balance, so check them against your PDF: ' +
-      s.unexplained.slice(0, 8).map(u => 'S.No ' + u.sno + ' (off by ' + fmt(u.difference) + ')').join('; ') +
+      s.unexplained.slice(0, 8).map(u => 'Row ' + u.sno + ' (off by ' + fmt(u.difference) + ')').join('; ') +
       (s.unexplained.length > 8 ? '; ...' : '');
   } else { wb.hidden = true; }
 
   const cards = $('cards'); cards.replaceChildren();
   [['Opening balance', s.opening, ''], ['Total credits', s.credits, 'cr'], ['Total debits', s.debits, 'db'],
-   ['WHT deducted (20%)', s.wht, ''], ['Closing balance', s.closing, 'big']].forEach(([label, v, cls]) => {
+      ['WHT deducted', s.wht, ''], ['Closing balance', s.closing, 'big']]
+    .filter(([label, v]) => !(label === 'WHT deducted' && v === 0))
+    .forEach(([label, v, cls]) => {
     const c = el('div', 'c ' + cls);
     c.appendChild(el('label', '', label));
     c.appendChild(el('div', '', fmt(v)));
@@ -832,10 +821,9 @@ function renderPanel() {
     if (tab.cat === null) cols.push({key: 'category', label: 'Category'});
     cols.push({key: 'debit', label: 'Debit', right: true, num: true, kind: 'debit'},
               {key: 'credit', label: 'Credit', right: true, num: true, kind: 'credit'},
-              {key: 'wht', label: 'WHT', right: true, num: true, kind: 'wht'},
               {key: 'balance', label: 'Balance', right: true, num: true});
     body.appendChild(buildTable(cols, rows, {desc: 'Total (' + rows.length + ' transactions)',
-      debit: sum(rows, 'debit'), credit: sum(rows, 'credit'), wht: sum(rows, 'wht')}));
+        debit: sum(rows, 'debit'), credit: sum(rows, 'credit')}));
   }
 }
 </script>
