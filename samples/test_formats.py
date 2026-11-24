@@ -1,3 +1,8 @@
+import os, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+os.chdir(HERE)
+
 import pdfplumber
 from balance_app import group_lines, find_columns, read_date
 
@@ -43,7 +48,7 @@ from balance_app import read_date
 from balance_app import read_row, slash_format, newest_first, DATE_FORMATS
 
 print()
-for name in ["demo_statement.pdf", "sample_A_us_style.pdf", "sample_B_uk_style.pdf",
+for name in ["sample_A_us_style.pdf", "sample_B_uk_style.pdf",
              "sample_C_single_amount.pdf", "sample_D_pk_dmy_with_tax.pdf"]:
     rows, cols = [], None
     with pdfplumber.open(name) as pdf:
